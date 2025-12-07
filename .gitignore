@@ -1,0 +1,21 @@
+# Ignore SQLite database
+database.sqlite
+*.sqlite
+*.db
+
+# Ignore ONLY the huge CSV
+notebook/data/amazon_reviews_clean.csv
+
+# Ignore Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+
+# Ignore environment files
+.env
+*.log
+
+# Ignore VS Code settings
+.vscode/
