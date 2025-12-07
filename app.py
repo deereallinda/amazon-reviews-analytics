@@ -12,6 +12,8 @@ import numpy as np
 import streamlit as st
 import seaborn as sns
 import matplotlib.pyplot as plt
+from pathlib import Path         
+
 
 from textblob import TextBlob
 
@@ -23,13 +25,21 @@ st.set_page_config(page_title="Amazon Reviews Analytics", layout="wide")
 # STEP 1: LOAD CLEANED DATA
 # =============================================================================
 @st.cache_data
-def load_data(path: str) -> pd.DataFrame:
-    # I cached the loader so the data only loads once per session for speed.
-    df = pd.read_csv(path, parse_dates=["Time"])
+def load_data(rel_path: str = "data/amazon_reviews_clean.csv") -> pd.DataFrame:
+    """
+    Load the cleaned CSV relative to this app.py file, so it works both
+    locally and on Streamlit Cloud.
+    """
+    app_dir = Path(__file__).parent          # folder where app.py lives
+    csv_path = app_dir / rel_path            # e.g. <repo>/data/amazon_reviews_clean.csv
+
+    df = pd.read_csv(csv_path, parse_dates=["Time"])
     return df
 
 
-data = load_data("data/amazon_reviews_clean.csv")
+data = load_data()   # use default path
+
+
 
 st.title("📦 Amazon Reviews – Analytics Dashboard")
 st.markdown(
