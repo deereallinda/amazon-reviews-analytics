@@ -3,19 +3,15 @@ database.sqlite
 *.sqlite
 *.db
 
-# Ignore ONLY the huge CSV
+# Ignore ONLY huge or backup data
+BigDataBackups/
+notebook/data/
 notebook/data/amazon_reviews_clean.csv
 
-# Ignore Jupyter notebook checkpoints
-.ipynb_checkpoints/
-
-# Ignore Python cache files
+# Python cache
 __pycache__/
 *.pyc
 
-# Ignore environment files
+# Envs
 .env
-*.log
-
-# Ignore VS Code settings
-.vscode/
+*.venv
