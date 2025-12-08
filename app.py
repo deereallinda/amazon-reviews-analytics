@@ -20,9 +20,6 @@ st.set_page_config(page_title="Amazon Reviews Dashboard", layout="wide")
 # ================================================================
 @st.cache_data
 def load_data(rel_path: str = "data/amazon_reviews_clean.csv") -> pd.DataFrame:
-    """
-    Loads the cleaned Amazon reviews CSV relative to the app directory.
-    """
     app_dir = Path(__file__).parent
     csv_path = app_dir / rel_path
     df = pd.read_csv(csv_path, parse_dates=["Time"])
@@ -33,7 +30,7 @@ data = load_data()
 
 
 # ================================================================
-# SIDEBAR — RATING FILTER ONLY
+# SIDEBAR — RATING FILTER
 # ================================================================
 st.sidebar.header("⭐ Filter Reviews by Rating")
 
@@ -42,7 +39,7 @@ rating_options = [1, 2, 3, 4, 5]
 selected_ratings = st.sidebar.multiselect(
     "Select rating scores to include:",
     options=rating_options,
-    default=rating_options   # show all by default
+    default=rating_options
 )
 
 df = data[data["Score"].isin(selected_ratings)].copy()
@@ -55,35 +52,34 @@ st.sidebar.markdown(f"🔎 **{len(df):,} reviews included**")
 # ================================================================
 st.title("📦 Amazon Reviews – Insights Dashboard")
 st.markdown(
-    """
-    Explore key insights from Amazon product reviews:
+"""
+Explore key insights from Amazon product reviews:
 
-    **1️⃣ Sentiment Overview — customer emotions**  
-    **2️⃣ Customer Segments (CLV-Style) — who matters most**  
-    **3️⃣ Product Popularity & Ratings — which products win and which fail**  
+**1️⃣ Sentiment Overview — customer emotions**  
+**2️⃣ Customer Segments (CLV-Style) — who matters most**  
+**3️⃣ Product Popularity & Ratings — which products win and which fail**  
 
-    Use the **rating filter** on the left to drill deeper into specific review types  
-    (e.g., only negative reviews, only 5-star reviews, etc.)
-    """
+Use the ⭐ rating filter on the left to drill into negative-only,
+positive-only, or mixed review subsets.
+"""
 )
 
 
 # ================================================================
 # TABS
 # ================================================================
-tab1, tab2, tab3 = st.tabs(
-    [
-        "💬 Sentiment Overview",
-        "👥 Customer Segments",
-        "📊 Product Popularity",
-    ]
-)
+tab1, tab2, tab3 = st.tabs([
+    "💬 Sentiment Overview",
+    "👥 Customer Segments",
+    "📊 Product Popularity"
+])
 
 
 # ================================================================
 # TAB 1 — SENTIMENT OVERVIEW
 # ================================================================
 with tab1:
+
     st.subheader("💬 Sentiment Overview of Review Summaries")
     st.markdown("Sentiment is calculated using TextBlob polarity (-1 to +1).")
 
@@ -107,7 +103,6 @@ with tab1:
 
     col1, col2 = st.columns([1, 2])
 
-    # Pie Chart + Emotion Distribution
     with col1:
         st.markdown("### Emotion Distribution")
         emotion_counts = df["emotion"].value_counts()
@@ -117,10 +112,9 @@ with tab1:
         ax.set_ylabel("")
         st.pyplot(fig)
 
-    # Positive + Negative Example Lists
     with col2:
-        st.markdown("### Example Summaries")
-        
+        st.markdown("### Example Positive & Negative Summaries")
+
         st.write("**Negative Summaries:**")
         for s in df[df["polarity"] < -0.2]["Summary"].head(6):
             st.write(f"- {s}")
@@ -130,22 +124,37 @@ with tab1:
         for s in df[df["polarity"] > 0.2]["Summary"].head(6):
             st.write(f"- {s}")
 
-    st.markdown(
-        """
-        **💡 Insight:**  
-        The sentiment distribution gives a quick snapshot of customer mood.  
-        - Negative summaries reveal pain points.  
-        - Positive summaries highlight strengths and opportunities.
-        """
-    )
+    # EXECUTIVE EXPLANATION
+    st.markdown("""
+    ---
+    ## 🧠 Executive Interpretation
 
+    This section helps us understand **how customers feel** about their purchases.
+
+    **What this chart shows:**  
+    - A breakdown of emotions (Joy, Neutral, Anger/Sad) extracted from review summaries.  
+    - Real examples of positive and negative customer remarks.
+
+    **What we can derive:**  
+    - A high percentage of **Joy** indicates strong customer satisfaction.  
+    - A noticeable share of **Anger/Sad** highlights recurring problems or customer frustration.  
+    - Example summaries reveal concrete issues (quality, shipping, expectations) or strengths.
+
+    **Business value:**  
+    - Product teams can prioritise issues based on negative sentiment.  
+    - Support teams can prepare for common complaints.  
+    - Marketing can incorporate phrases customers love into campaigns.  
+    - Executives get a fast "emotional health check" of the product ecosystem.
+    """)
+    
 
 # ================================================================
 # TAB 2 — CUSTOMER SEGMENTS (CLV)
 # ================================================================
 with tab2:
+
     st.subheader("👥 Customer Segmentation (CLV-Style)")
-    st.markdown("Segment customers based on number of products reviewed (proxy for purchases).")
+    st.markdown("Customers are segmented based on the number of products they have reviewed.")
 
     user_agg = (
         df.groupby("UserId")
@@ -181,22 +190,39 @@ with tab2:
         ax.set_ylabel("Count")
         st.pyplot(fig)
 
-    st.markdown(
-        """
-        **💡 Insight:**  
-        - **Power Buyers** generate the highest lifetime value → retain & reward.  
-        - **Loyal customers** are strong upsell/cross-sell candidates.  
-        - **Regular & Occasional customers** may need promotions or reminders.
-        """
-    )
+    # EXECUTIVE EXPLANATION
+    st.markdown("""
+    ---
+    ## 🧠 Executive Interpretation
+
+    This segmentation identifies the **value of different customer groups**.
+
+    **What this chart shows:**  
+    - *Power Buyers* review/purchase 100+ products → extremely valuable customers  
+    - *Loyal* customers make regular purchases  
+    - *Regular* customers buy occasionally  
+    - *Occasional* buyers show minimal engagement
+
+    **What we can derive:**  
+    - Power Buyers contribute disproportionately to revenue.  
+    - Loyal customers are strong cross-sell and upsell candidates.  
+    - Occasional customers may need discounts or recommendations to reactivate.
+
+    **Business value:**  
+    - Retention teams can protect Power Buyers with perks and benefits.  
+    - Marketing can target Loyal customers with bundles or high-margin items.  
+    - CRM teams can design campaigns for Regular and Occasional buyers.  
+    - Executives can understand customer base health at a glance.
+    """)
 
 
 # ================================================================
-# TAB 3 — PRODUCT POPULARITY & RATING DISTRIBUTION
+# TAB 3 — PRODUCT POPULARITY & RATINGS
 # ================================================================
 with tab3:
+
     st.subheader("📊 Product Popularity & Rating Distribution")
-    st.markdown("Top products ordered by number of reviews.")
+    st.markdown("Shows the most-reviewed products and how customers rate them.")
 
     top_n = st.slider("Select number of top products", 5, 30, 10)
 
@@ -221,11 +247,26 @@ with tab3:
     ax.set_ylabel("Product ID")
     st.pyplot(fig)
 
-    st.markdown(
-        """
-        **💡 Insight:**  
-        - High-volume AND high-rating products = ideal for promotion.  
-        - High-volume BUT low-rating products = quality issues or misleading descriptions.  
-        - The rating filter (left panel) helps drill into product-level sentiment.
-        """
-    )
+    # EXECUTIVE EXPLANATION
+    st.markdown("""
+    ---
+    ## 🧠 Executive Interpretation
+
+    This visualisation shows **which products attract the most customer attention**  
+    and how satisfied customers are with them.
+
+    **What this chart shows:**  
+    - The most-reviewed (most popular) products  
+    - The breakdown of 1–5 star ratings for each  
+    - Easy comparison between products
+
+    **What we can derive:**  
+    - Products with many reviews AND high ratings are strong performers.  
+    - Products with high review volume BUT low ratings may have defects or misleading descriptions.  
+    - A spike in low ratings signals quality issues, supplier problems, or incorrect product listings.
+
+    **Business value:**  
+    - Marketing can promote top-rated high-volume products.  
+    - Product teams can investigate low-rated but high-volume items.  
+    - Executives can track product portfolio health and identify revenue drivers.
+    """)
