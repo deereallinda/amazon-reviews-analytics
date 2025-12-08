@@ -33,35 +33,21 @@ data = load_data()
 
 
 # ================================================================
-# FIXED, SAFE DATE FILTER
+# SIDEBAR — RATING FILTER ONLY
 # ================================================================
-st.sidebar.header("📅 Filter Reviews by Date")
+st.sidebar.header("⭐ Filter Reviews by Rating")
 
-min_date = data["Time"].min().date()
-max_date = data["Time"].max().date()
+rating_options = [1, 2, 3, 4, 5]
 
-start_date, end_date = st.sidebar.date_input(
-    "Select review date range:",
-    value=(min_date, max_date),
-    min_value=min_date,
-    max_value=max_date,
+selected_ratings = st.sidebar.multiselect(
+    "Select rating scores to include:",
+    options=rating_options,
+    default=rating_options   # show all by default
 )
 
-# Ensure user cannot break the selection
-if start_date < min_date:
-    start_date = min_date
-if end_date > max_date:
-    end_date = max_date
-if start_date > end_date:
-    start_date = min_date
-    end_date = max_date
+df = data[data["Score"].isin(selected_ratings)].copy()
 
-df = data[
-    (data["Time"].dt.date >= start_date) &
-    (data["Time"].dt.date <= end_date)
-].copy()
-
-st.sidebar.markdown(f"🔎 **{len(df):,} reviews selected**")
+st.sidebar.markdown(f"🔎 **{len(df):,} reviews included**")
 
 
 # ================================================================
@@ -70,13 +56,14 @@ st.sidebar.markdown(f"🔎 **{len(df):,} reviews selected**")
 st.title("📦 Amazon Reviews – Insights Dashboard")
 st.markdown(
     """
-    Explore key insights from Amazon product reviews, focusing on:
+    Explore key insights from Amazon product reviews:
 
     **1️⃣ Sentiment Overview — customer emotions**  
     **2️⃣ Customer Segments (CLV-Style) — who matters most**  
     **3️⃣ Product Popularity & Ratings — which products win and which fail**  
 
-    Use the date filter on the left to explore trends across time.
+    Use the **rating filter** on the left to drill deeper into specific review types  
+    (e.g., only negative reviews, only 5-star reviews, etc.)
     """
 )
 
@@ -146,9 +133,9 @@ with tab1:
     st.markdown(
         """
         **💡 Insight:**  
-        The sentiment mix shows customer mood at a glance.  
-        Negative summaries pinpoint defects or frustrations.  
-        Positive summaries highlight strengths and value drivers.
+        The sentiment distribution gives a quick snapshot of customer mood.  
+        - Negative summaries reveal pain points.  
+        - Positive summaries highlight strengths and opportunities.
         """
     )
 
@@ -158,7 +145,7 @@ with tab1:
 # ================================================================
 with tab2:
     st.subheader("👥 Customer Segmentation (CLV-Style)")
-    st.markdown("Segment customers by number of products reviewed (proxy for purchases).")
+    st.markdown("Segment customers based on number of products reviewed (proxy for purchases).")
 
     user_agg = (
         df.groupby("UserId")
@@ -197,9 +184,9 @@ with tab2:
     st.markdown(
         """
         **💡 Insight:**  
-        - **Power Buyers** = high-value customers → retain with perks & exclusives.  
-        - **Loyal** = cross-sell opportunities.  
-        - **Regular & Occasional** = candidates for promotions or discovery prompts.
+        - **Power Buyers** generate the highest lifetime value → retain & reward.  
+        - **Loyal customers** are strong upsell/cross-sell candidates.  
+        - **Regular & Occasional customers** may need promotions or reminders.
         """
     )
 
@@ -237,8 +224,8 @@ with tab3:
     st.markdown(
         """
         **💡 Insight:**  
-        - High-volume + high-rating products are excellent promotion candidates.  
-        - High-volume + low-rating products need urgent product review or supplier checks.  
-        - Sudden drops in ratings can reveal emerging defects or changes in quality.
+        - High-volume AND high-rating products = ideal for promotion.  
+        - High-volume BUT low-rating products = quality issues or misleading descriptions.  
+        - The rating filter (left panel) helps drill into product-level sentiment.
         """
     )
