@@ -1,66 +1,35 @@
 # =============================================================================
 # AMAZON REVIEWS ANALYTICS APP
-# Author: Linda Mthembu (Upgraded Version)
+# Author: Linda Mthembu
 # =============================================================================
 
 import pandas as pd
 import numpy as np
 import streamlit as st
-import plotly.express as px
-import plotly.graph_objects as go
+import seaborn as sns
+import matplotlib.pyplot as plt
 from textblob import TextBlob
 from pathlib import Path
 
-# =============================================================================
-# CONFIGURATION & STYLING
-# =============================================================================
-st.set_page_config(
-    page_title="Amazon Reviews Analytics", 
-    page_icon="📦",
-    layout="wide"
-)
+# Set style for seaborn
+sns.set(style="whitegrid")
+st.set_page_config(page_title="Amazon Reviews Analytics", layout="wide")
 
-# Custom CSS for metric cards and headers
-st.markdown("""
-<style>
-    div[data-testid="metric-container"] {
-        background-color: #f0f2f6;
-        border: 1px solid #d6d6d6;
-        padding: 10px;
-        border-radius: 5px;
-    }
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 2px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        white-space: pre-wrap;
-        background-color: #f9f9f9;
-        border-radius: 4px 4px 0px 0px;
-        gap: 1px;
-        padding-top: 10px;
-        padding-bottom: 10px;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #ffffff;
-        border-bottom: 2px solid #ff4b4b;
-    }
-</style>
-""", unsafe_allow_html=True)
 
 # =============================================================================
-# DATA LOADING
+# STEP 1: LOAD DATA
 # =============================================================================
 @st.cache_data
 def load_data(rel_path: str = "data/amazon_reviews_clean.csv") -> pd.DataFrame:
     try:
         app_dir = Path(__file__).parent
         csv_path = app_dir / rel_path
-        # Create dummy data if file is missing for demo purposes
+        
+        # Check if file exists to prevent crash in demo
         if not csv_path.exists():
-             st.error(f"File not found at {csv_path}. Please ensure data exists.")
-             return pd.DataFrame()
-             
+            st.error(f"Data file not found: {csv_path}")
+            return pd.DataFrame()
+            
         df = pd.read_csv(csv_path, parse_dates=["Time"])
         return df
     except Exception as e:
@@ -72,50 +41,46 @@ data = load_data()
 if data.empty:
     st.stop()
 
-# =============================================================================
-# SIDEBAR FILTERS
-# =============================================================================
-st.sidebar.title("🛠️ Controls")
-st.sidebar.divider()
 
-st.sidebar.subheader("Filter Reviews by Rating")
+# =============================================================================
+# STEP 2: SIDEBAR (RATINGS FILTER)
+# =============================================================================
+st.sidebar.header("⭐ Filter Reviews")
+
 rating_options = [1, 2, 3, 4, 5]
 
 selected_ratings = st.sidebar.multiselect(
-    "Select Star Ratings:",
+    "Select rating scores to include:",
     options=rating_options,
-    default=rating_options,
-    format_func=lambda x: f"{x} Stars"
+    default=rating_options
 )
 
-# Apply Filter
-df = data[data["Score"].isin(selected_ratings)].copy()
+# Filter data based on selection
+data_filtered = data[data["Score"].isin(selected_ratings)].copy()
 
-st.sidebar.divider()
-st.sidebar.markdown("**Data Scope:**")
-st.sidebar.info(f"📊 **{len(df):,}** reviews loaded")
+st.sidebar.markdown(f"🔎 **{len(data_filtered):,} reviews included**")
+
 
 # =============================================================================
-# MAIN PAGE HEADER & METRICS
+# MAIN PAGE
 # =============================================================================
 st.title("📦 Amazon Reviews – Analytics Dashboard")
+st.markdown(
+    """
+    Explore key insights from Amazon product reviews:
+    - **Customer Segments**
+    - **Product Popularity**
+    - **Sentiment & Verbosity**
+    """
+)
 
-# KPI Row
-k1, k2, k3, k4 = st.columns(4)
-k1.metric("Total Reviews", f"{len(df):,}")
-k2.metric("Avg Rating", f"{df['Score'].mean():.2f} ⭐")
-k3.metric("Unique Products", f"{df['ProductId'].nunique():,}")
-k4.metric("Active Users", f"{df['UserId'].nunique():,}")
-
-st.markdown("---")
 
 # =============================================================================
-# DATA PROCESSING FOR TABS
+# PRE-CALCULATIONS
 # =============================================================================
-
-# 1. User Aggregates
+# 1. User Aggregates for CLV
 user_agg = (
-    df.groupby("UserId")
+    data_filtered.groupby("UserId")
     .agg(
         Number_of_summaries=("Summary", "count"),
         num_text=("Text", "count"),
@@ -124,22 +89,22 @@ user_agg = (
     )
 )
 
-# 2. CLV Segment Logic
 def clv_segment(row):
-    if row["No_of_prods_purchased"] >= 100: return "Power Buyer (VIP)"
+    if row["No_of_prods_purchased"] >= 100: return "Power Buyer"
     if row["No_of_prods_purchased"] >= 30: return "Loyal"
     if row["No_of_prods_purchased"] >= 10: return "Regular"
     return "Occasional"
 
 user_agg["clv_segment"] = user_agg.apply(clv_segment, axis=1)
 
-# 3. Helpfulness Ratio
-# Avoid division by zero
-mask_den = df["HelpfulnessDenominator"] > 0
-df.loc[mask_den, "helpfulness_ratio"] = (
-    df.loc[mask_den, "HelpfulnessNumerator"] / df.loc[mask_den, "HelpfulnessDenominator"]
+# 2. Helpfulness Ratio
+mask_den = data_filtered["HelpfulnessDenominator"] > 0
+data_filtered.loc[mask_den, "helpfulness_ratio"] = (
+    data_filtered.loc[mask_den, "HelpfulnessNumerator"]
+    / data_filtered.loc[mask_den, "HelpfulnessDenominator"]
 )
-df["helpfulness_ratio"] = df["helpfulness_ratio"].fillna(0.0)
+data_filtered["helpfulness_ratio"] = data_filtered["helpfulness_ratio"].fillna(0.0)
+
 
 # =============================================================================
 # TABS
@@ -147,95 +112,93 @@ df["helpfulness_ratio"] = df["helpfulness_ratio"].fillna(0.0)
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "👥 Customer Segments",
     "📊 Products & Ratings",
-    "👍 Helpfulness vs Rating",
-    "📝 Review Verbosity",
-    "💬 Sentiment Overview",
+    "👍 Helpfulness",
+    "📝 Verbosity",
+    "💬 Sentiment"
 ])
+
 
 # -----------------------------------------------------------------------------
 # TAB 1 – CUSTOMER SEGMENTS
 # -----------------------------------------------------------------------------
 with tab1:
-    st.subheader("👥 Customer Segmentation (CLV-Style)")
-    st.caption("CLV = Customer Lifetime Value. This groups users by their purchasing volume.")
+    st.subheader("👥 Customer Value Segmentation (CLV-Style)")
+    
+    # CLV Explanation
+    st.info(
+        "**What does CLV-Style mean?**\n\n"
+        "**CLV** stands for **Customer Lifetime Value**. In this context, we segment users based on their "
+        "purchase frequency (Volume) to identify who brings the most value to the business.\n"
+        "- **Power Buyers:** High volume, high value.\n"
+        "- **Occasional:** Low volume, lower immediate value."
+    )
+
+    seg_counts = user_agg["clv_segment"].value_counts()
 
     col1, col2 = st.columns([1, 2])
 
-    seg_counts = user_agg["clv_segment"].value_counts().reset_index()
-    seg_counts.columns = ["Segment", "Count"]
-
     with col1:
-        st.dataframe(seg_counts, use_container_width=True)
+        st.markdown("#### Segment Counts")
+        st.dataframe(seg_counts.rename("Users").to_frame())
 
     with col2:
-        fig_seg = px.bar(
-            seg_counts, 
-            x="Segment", 
-            y="Count", 
-            color="Segment",
-            text="Count",
-            title="User Count by CLV Segment",
-            color_discrete_sequence=px.colors.qualitative.Prism
-        )
-        fig_seg.update_traces(textposition='outside')
-        st.plotly_chart(fig_seg, use_container_width=True)
+        fig, ax = plt.subplots(figsize=(6, 4))
+        seg_counts.plot(kind="bar", ax=ax, color="#4c72b0")
+        ax.set_title("Users per Segment")
+        ax.set_xlabel("Segment")
+        ax.set_ylabel("Count")
+        st.pyplot(fig)
 
-    with st.expander("🧠 Interpretation from data (Click to open)", expanded=True):
-        
-        st.markdown("""
-        **What is CLV-Style Segmentation?**
-        We are grouping users based on frequency to estimate their value.
-        
-        * **Power Buyers (VIP):** High purchase volume. Even if they are few, they drive significant revenue.
-        * **Loyal:** Consistent repeat purchasers.
-        * **Occasional:** The "long tail" of customers who buy once or twice.
-        
-        **Strategy:** * *Power Buyers:* Reward with exclusivity.
-        * *Occasional:* Re-engage with discounts.
-        """)
+    st.markdown("---")
+    st.markdown("### 🧠 Interpretation from data")
+    st.markdown(
+        """
+        - **Power Buyers** contribute disproportionately to revenue.
+        - **Loyal customers** are strong candidates for cross-selling.
+        - **Occasional customers** may need discounts to reactivate.
+        """
+    )
+
 
 # -----------------------------------------------------------------------------
-# TAB 2 – PRODUCT POPULARITY & RATINGS
+# TAB 2 – PRODUCT POPULARITY
 # -----------------------------------------------------------------------------
 with tab2:
     st.subheader("📊 Product Popularity & Rating Distribution")
 
-    top_n = st.slider("Number of top products to show", 5, 50, 10)
+    top_n = st.slider("Select number of top products", 5, 30, 10)
 
-    # Calculate top products
-    prod_counts = df["ProductId"].value_counts().head(top_n)
+    prod_counts = data_filtered["ProductId"].value_counts().head(top_n).rename("review_count")
+
+    st.markdown("#### Top Products by Review Count")
+    st.dataframe(prod_counts.to_frame())
+
     top_prod_ids = prod_counts.index
-    
-    subset_prod = df[df["ProductId"].isin(top_prod_ids)]
+    subset = data_filtered[data_filtered["ProductId"].isin(top_prod_ids)]
 
-    col_chart, col_data = st.columns([2, 1])
+    fig, ax = plt.subplots(figsize=(9, 6))
+    sns.countplot(
+        data=subset,
+        y="ProductId",
+        hue="Score",
+        order=top_prod_ids,
+        ax=ax,
+        palette="viridis"
+    )
+    ax.set_title("Rating Distribution for Top Products")
+    ax.set_xlabel("Number of Reviews")
+    ax.set_ylabel("Product ID")
+    st.pyplot(fig)
 
-    with col_chart:
-        # Stacked bar for distribution
-        chart_data = subset_prod.groupby(['ProductId', 'Score']).size().reset_index(name='Count')
-        fig_prod = px.bar(
-            chart_data, 
-            x="Count", 
-            y="ProductId", 
-            color="Score", 
-            orientation='h',
-            title=f"Rating Distribution (Top {top_n} Products)",
-            labels={"ProductId": "Product ID", "Score": "Stars"},
-            category_orders={"Score": [5, 4, 3, 2, 1]},
-            color_continuous_scale=px.colors.sequential.Viridis
-        )
-        fig_prod.update_layout(yaxis={'categoryorder':'total ascending'})
-        st.plotly_chart(fig_prod, use_container_width=True)
+    st.markdown("---")
+    st.markdown("### 🧠 Interpretation from data")
+    st.markdown(
+        """
+        - Products with high review volume **AND** high ratings are strong performers.
+        - A spike in low ratings (orange/purple bars) signals quality issues or misleading descriptions.
+        """
+    )
 
-    with col_data:
-        st.markdown("#### Review Counts")
-        st.dataframe(prod_counts.rename("Reviews"), use_container_width=True)
-
-    with st.expander("🧠 Interpretation from data"):
-        st.markdown("""
-        * **High Volume + High Rating (Yellow/Green):** Market leaders. Safe to promote.
-        * **High Volume + Low Rating (Purple/Blue):** "Review Bombs." These products sell well but disappoint customers. **Action:** Check for defect batches or misleading descriptions.
-        """)
 
 # -----------------------------------------------------------------------------
 # TAB 3 – HELPFULNESS VS RATING
@@ -243,140 +206,124 @@ with tab2:
 with tab3:
     st.subheader("👍 Helpfulness vs Rating Behaviour")
 
-    sample_size = st.slider("Sample size for scatter plot (improves speed)", 1000, 20000, 5000)
-    sample = df.sample(min(sample_size, len(df)), random_state=42)
+    sample_size = st.slider("Sample size for scatter plot", 1000, 20000, 5000)
+    sample = data_filtered.sample(min(sample_size, len(data_filtered)), random_state=42)
 
-    col_scatter, col_bar = st.columns(2)
+    fig, ax = plt.subplots(figsize=(7, 5))
+    sns.scatterplot(
+        data=sample,
+        x="helpfulness_ratio",
+        y="Score",
+        alpha=0.3,
+        ax=ax
+    )
+    ax.set_title("Helpfulness Ratio vs Rating")
+    ax.set_xlabel("Helpfulness Ratio (0–1)")
+    ax.set_ylabel("Rating")
+    st.pyplot(fig)
 
-    with col_scatter:
-        # Scatter Plot
-        fig_scat = px.scatter(
-            sample, 
-            x="helpfulness_ratio", 
-            y="Score", 
-            opacity=0.3,
-            title="Helpfulness Ratio vs Rating (Sampled)",
-            labels={"helpfulness_ratio": "Helpfulness Ratio (0 to 1)"}
-        )
-        st.plotly_chart(fig_scat, use_container_width=True)
+    st.markdown("---")
+    st.markdown("### 🧠 Interpretation from data")
+    st.markdown(
+        """
+        - If the most helpful reviews have balanced scores, the system is healthy.
+        - If only 5-star reviews are marked helpful, there may be bias.
+        """
+    )
 
-    with col_bar:
-        # Bar Plot (Buckets)
-        sample["bucket"] = pd.cut(
-            sample["helpfulness_ratio"],
-            bins=[-0.01, 0, 0.25, 0.5, 0.75, 1.0],
-            labels=["0", "Low (0–0.25)", "Med (0.25–0.5)", "High (0.5–0.75)", "Very High (0.75–1)"]
-        )
-        bucket_agg = sample.groupby("bucket")["Score"].mean().reset_index()
-        
-        fig_buck = px.bar(
-            bucket_agg, 
-            x="bucket", 
-            y="Score",
-            title="Avg Rating per Helpfulness Bucket",
-            color="Score",
-            color_continuous_scale="RdBu"
-        )
-        st.plotly_chart(fig_buck, use_container_width=True)
-
-    with st.expander("🧠 Interpretation from data"):
-        st.markdown("""
-        * **Correlation Check:** If the "Very High" helpfulness bucket has a lower average score, it means **negative reviews are being voted as most helpful**.
-        * **Bias Check:** If almost all helpful reviews are 5-star, the ecosystem may be biased or incentivised.
-        """)
 
 # -----------------------------------------------------------------------------
 # TAB 4 – REVIEW VERBOSITY
 # -----------------------------------------------------------------------------
 with tab4:
-    st.subheader("📝 Review Length Analysis")
-    
-    # Generate Viewer Type on the fly if not in CSV to ensure code works
-    if "viewer_type" not in df.columns:
-        # Calculate frequency per user
-        user_counts = df['UserId'].map(df['UserId'].value_counts())
-        df['viewer_type'] = np.where(user_counts > 5, 'Frequent', 'Occasional')
+    st.subheader("📝 Review Verbosity Analysis")
 
-    # Filter outliers for better visualization
-    df_len = df[df["Text_length"] < 500]
+    # Create viewer_type if not exists
+    if "viewer_type" not in data_filtered.columns:
+         # Rough approximation for display
+         user_counts = data_filtered['UserId'].map(data_filtered['UserId'].value_counts())
+         data_filtered['viewer_type'] = np.where(user_counts > 5, 'Frequent', 'Occasional')
 
-    fig_box = px.box(
-        df_len, 
-        x="Score", 
-        y="Text_length", 
-        color="viewer_type",
-        title="Review Length Distribution by Score & User Type",
-        labels={"Text_length": "Word Count", "viewer_type": "User Type"}
+    df_len = data_filtered[data_filtered["Text_length"] < 500]
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    sns.boxplot(
+        data=df_len,
+        x="Score",
+        y="Text_length",
+        hue="viewer_type",
+        ax=ax
     )
-    st.plotly_chart(fig_box, use_container_width=True)
+    ax.set_title("Review Length by Rating")
+    st.pyplot(fig)
 
-    with st.expander("🧠 Interpretation from data"):
-        st.markdown("""
-        * **Box Height:** Taller boxes mean more variation in how much people write.
-        * **Insight:** Frequent reviewers (Red/Blue distinction) often write longer, more nuanced reviews. 
-        * **Negative vs Positive:** Typically, angry customers (1-2 stars) write longer text (essays) explaining *why* they are angry, whereas 5-star reviews can be short ("Great!").
-        """)
+    st.markdown("---")
+    st.markdown("### 🧠 Interpretation from data")
+    st.markdown(
+        """
+        - **Frequent reviewers** often write longer, more detailed reviews.
+        - Long negative reviews are often the most valuable for Product Managers to read.
+        """
+    )
+
 
 # -----------------------------------------------------------------------------
 # TAB 5 – SENTIMENT OVERVIEW
 # -----------------------------------------------------------------------------
 with tab5:
-    st.subheader("💬 Sentiment Analysis of Summaries")
+    st.subheader("💬 Sentiment Overview of Review Summaries")
 
-    # Polarity Calculation
     @st.cache_data
     def compute_polarity(series: pd.Series) -> pd.Series:
-        return series.astype(str).apply(lambda x: TextBlob(x).sentiment.polarity)
+        def polarity(text):
+            try:
+                return TextBlob(str(text)).sentiment.polarity
+            except:
+                return 0.0
+        return series.astype(str).apply(polarity)
 
-    df["polarity"] = compute_polarity(df["Summary"])
+    data_filtered["polarity"] = compute_polarity(data_filtered["Summary"])
 
-    def label_emotion(p):
+    def emotion_label(p):
         if p >= 0.4: return "Joy"
         if p <= -0.4: return "Anger/Sad"
         return "Neutral"
 
-    df["emotion"] = df["polarity"].apply(label_emotion)
+    data_filtered["emotion"] = data_filtered["polarity"].apply(emotion_label)
 
-    col_pie, col_voice = st.columns([1, 2])
+    col1, col2 = st.columns([1, 2])
 
-    with col_pie:
-        emotion_counts = df["emotion"].value_counts().reset_index()
-        emotion_counts.columns = ["Emotion", "Count"]
+    with col1:
+        st.markdown("### Emotion Distribution")
+        emotion_counts = data_filtered["emotion"].value_counts()
         
-        fig_donut = px.pie(
-            emotion_counts, 
-            names="Emotion", 
-            values="Count", 
-            hole=0.4,
-            title="Emotional Distribution",
-            color="Emotion",
-            color_discrete_map={"Joy": "#2ecc71", "Neutral": "#95a5a6", "Anger/Sad": "#e74c3c"}
-        )
-        st.plotly_chart(fig_donut, use_container_width=True)
+        fig, ax = plt.subplots(figsize=(4, 4))
+        emotion_counts.plot(kind="pie", autopct="%1.1f%%", ax=ax, colors=['#66b3ff','#99ff99','#ff9999'])
+        ax.set_ylabel("")
+        st.pyplot(fig)
 
-    with col_voice:
-        st.markdown("#### 🗣️ Voice of the Customer")
+    with col2:
+        st.markdown("### Voice of the Customer")
         
-        # Positive First as requested
-        pos_examples = df[df["polarity"] > 0.2]["Summary"].head(5).tolist()
-        neg_examples = df[df["polarity"] < -0.2]["Summary"].head(5).tolist()
-        
-        tab_pos, tab_neg = st.tabs(["✅ Positive Highlights", "⚠️ Negative Feedback"])
-        
-        with tab_pos:
-            if pos_examples:
-                for s in pos_examples: st.success(f"\"{s}\"")
-            else:
-                st.info("No positive summaries in selection.")
-                
-        with tab_neg:
-            if neg_examples:
-                for s in neg_examples: st.error(f"\"{s}\"")
-            else:
-                st.info("No negative summaries in selection.")
+        # 1. POSITIVE FIRST
+        st.write("✅ **Positive Highlights:**")
+        pos_examples = data_filtered[data_filtered["polarity"] > 0.2]["Summary"].head(5)
+        for s in pos_examples:
+            st.write(f"- {s}")
 
-    with st.expander("🧠 Interpretation from data"):
-        st.markdown("""
-        * **Joy Dominance:** If Green (Joy) > 60%, customer satisfaction is healthy.
-        * **Anger Spikes:** If Red (Anger) exceeds 15%, investigate the specific negative keywords immediately.
-        """)
+        st.write("---")
+
+        # 2. NEGATIVE SECOND
+        st.write("⚠️ **Negative Feedback:**")
+        neg_examples = data_filtered[data_filtered["polarity"] < -0.2]["Summary"].head(5)
+        for s in neg_examples:
+            st.write(f"- {s}")
+
+    st.markdown("---")
+    st.markdown("### 🧠 Interpretation from data")
+    st.markdown(
+        """
+        - A high percentage of **Joy** indicates strong customer satisfaction.
+        - **Anger/Sad** highlights recurring problems or customer frustration.
+        """
+    )
