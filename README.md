@@ -64,4 +64,3 @@ This helps identify high-value users and guide retention strategies.
 
 ---
 
-## 📁 Project Structure
